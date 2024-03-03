@@ -1,4 +1,4 @@
-use super::{write_file, IndexMap, RequiresOneOf, VkRegistryData};
+use super::{parse_vk_version, write_file, IndexMap, RequiresOneOf, VkRegistryData};
 use heck::ToSnakeCase;
 use nom::{
     branch::alt, bytes::complete::take_while1, character::complete, combinator::eof, IResult,
@@ -835,11 +835,9 @@ fn extensions_members(ty: &str, extensions: &IndexMap<&str, &Extension>) -> Vec<
                     .promotedto
                     .as_deref()
                     .and_then(|pr| {
-                        if let Some(version) = pr.strip_prefix("VK_VERSION_") {
-                            let (major, minor) = version.split_once('_').unwrap();
+                        if let Some((major, minor)) = parse_vk_version(pr) {
                             Some(ExtensionStatus::PromotedTo(Requires::APIVersion(
-                                major.parse().unwrap(),
-                                minor.parse().unwrap(),
+                                major, minor,
                             )))
                         } else {
                             let ext_name = pr.strip_prefix("VK_").unwrap().to_snake_case();
@@ -858,11 +856,9 @@ fn extensions_members(ty: &str, extensions: &IndexMap<&str, &Extension>) -> Vec<
                         extension.deprecatedby.as_deref().and_then(|depr| {
                             if depr.is_empty() {
                                 Some(ExtensionStatus::DeprecatedBy(None))
-                            } else if let Some(version) = depr.strip_prefix("VK_VERSION_") {
-                                let (major, minor) = version.split_once('_').unwrap();
+                            } else if let Some((major, minor)) = parse_vk_version(depr) {
                                 Some(ExtensionStatus::DeprecatedBy(Some(Requires::APIVersion(
-                                    major.parse().unwrap(),
-                                    minor.parse().unwrap(),
+                                    major, minor,
                                 ))))
                             } else {
                                 let ext_name = depr.strip_prefix("VK_").unwrap().to_snake_case();
@@ -935,27 +931,23 @@ fn dependency_chain<'a>(
     let mut requires_one_of = RequiresOneOf::default();
 
     loop {
-        if let Some(version) = vk_name.strip_prefix("VK_VERSION_") {
-            let (major, minor) = version.split_once('_').unwrap();
-            requires_one_of.api_version = Some((major.parse().unwrap(), minor.parse().unwrap()));
+        if let Some((major, minor)) = parse_vk_version(vk_name) {
+            requires_one_of.api_version = Some((major, minor));
             break;
-        } else {
-            let ext_name = vk_name.strip_prefix("VK_").unwrap().to_snake_case();
-            let extension = extensions[vk_name];
-
-            match extension.ext_type.as_deref() {
+        }
+        let ext_name = vk_name.strip_prefix("VK_").unwrap().to_snake_case();
+        let extension = extensions[vk_name];
+        match extension.ext_type.as_deref() {
                 Some("device") => &mut requires_one_of.device_extensions,
                 Some("instance") => &mut requires_one_of.instance_extensions,
                 _ => unreachable!(),
             }
             .push(ext_name);
-
-            if let Some(promotedto) = extension.promotedto.as_ref() {
+        if let Some(promotedto) = extension.promotedto.as_ref() {
                 vk_name = promotedto.as_str();
             } else {
                 break;
             }
-        }
     }
 
     requires_one_of.device_extensions.reverse();

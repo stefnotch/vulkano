@@ -1,4 +1,5 @@
 use super::{write_file, IndexMap, VkRegistryData};
+use crate::autogen::parse_vk_version;
 use ahash::HashMap;
 use heck::ToSnakeCase;
 use nom::{bytes::complete::tag, character::complete::digit1, combinator::eof, sequence::tuple};
@@ -755,12 +756,8 @@ fn sorted_structs<'a>(
         let name = ty.name.as_ref().unwrap();
         (
             !is_physical_device_features(name),
-            if let Some(version) = provided_by
-                .iter()
-                .find_map(|s| s.strip_prefix("VK_VERSION_"))
-            {
-                let (major, minor) = version.split_once('_').unwrap();
-                major.parse::<i32>().unwrap() << 22 | minor.parse::<i32>().unwrap() << 12
+            if let Some((major, minor)) = provided_by.iter().find_map(|s| parse_vk_version(s)) {
+                (major as i32) << 22 | (minor as i32) << 12
             } else if provided_by.iter().any(|s| s.starts_with("VK_KHR_")) {
                 i32::MAX - 2
             } else if provided_by.iter().any(|s| s.starts_with("VK_EXT_")) {

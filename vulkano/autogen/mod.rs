@@ -84,6 +84,23 @@ fn get_vk_registry<P: AsRef<Path> + ?Sized>(path: &P) -> Registry {
     registry
 }
 
+pub fn parse_vk_version(value: &str) -> Option<(u32, u32)> {
+    let (value, _) = tag::<_, _, nom::error::Error<&str>>("VK_VERSION_")(value).ok()?;
+    match tuple((
+        complete::u32::<_, nom::error::Error<&str>>,
+        complete::char('_'),
+        complete::u32,
+        eof,
+    ))(value)
+    {
+        Ok((rest, (major, _, minor, _))) => {
+            assert!(rest.is_empty());
+            Some((major, minor))
+        }
+        Err(err) => panic!("Failed to parse VK_VERSION_ value: {:?}", err),
+    }
+}
+
 pub struct VkRegistryData<'r> {
     pub header_version: (u16, u16, u16),
     pub errors: Vec<&'r str>,

@@ -1,4 +1,5 @@
 use super::{write_file, IndexMap, RequiresOneOf, VkRegistryData};
+use crate::autogen::parse_vk_version;
 use heck::ToSnakeCase;
 use nom::{
     character::complete,
@@ -886,13 +887,12 @@ fn formats_members(
                                     spec: EnumSpec::Offset { extends, .. },
                                     ..
                                 }) if name == &format.name && extends == "VkFormat" => {
-                                    if let Some(version) = feature.name.strip_prefix("VK_VERSION_")
+                                    if let Some((major, minor)) = parse_vk_version(&feature.name)
                                     {
-                                        let (major, minor) = version.split_once('_').unwrap();
                                         member.requires_all_of.push(RequiresOneOf {
                                             api_version: Some((
-                                                major.parse().unwrap(),
-                                                minor.parse().unwrap(),
+                                                major,
+                                                minor,
                                             )),
                                             ..Default::default()
                                         });
